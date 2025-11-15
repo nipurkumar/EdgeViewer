@@ -1,23 +1,17 @@
 package com.example.edgeviewer
 
-/**
- * JNI Bridge to Native C++ OpenCV processing
- */
 class NativeBridge {
 
-    external fun initializeNative(): Boolean
-
-    external fun processFrame(
-        rgbData: ByteArray,
+    external fun processEdgeDetection(
+        imageData: ByteArray,
         width: Int,
-        height: Int
+        height: Int,
+        mode: Int
     ): ByteArray
 
-    external fun setProcessingMode(mode: Int)
-
-    external fun updateProcessingTime(timeMs: Double)
-
-    external fun getNativeFps(): Double
+    external fun initialize(): Boolean
 
     external fun release()
+
+    external fun getNativeFps(): Float
 }

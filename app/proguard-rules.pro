@@ -19,3 +19,19 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# Keep native methods
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# Keep edge detection classes
+-keep class com.example.edgeviewer.** { *; }
+
+# OpenCV
+-keep class org.opencv.** { *; }
+
+# Camera2 API
+-keep class android.hardware.camera2.** { *; }
+
+# OpenGL
+-keep class android.opengl.** { *; }
