@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Edge Detection Viewer - Web</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>Real-Time Edge Detection Viewer</h1>
+        <p>Real-time Edge Detection Processing Results</p>
+    </header>
+
+    <main>
+        <div class="viewer-container">
+            <canvas id="imageCanvas"></canvas>
+            <div class="overlay">
+                <div class="stats">
+                    <span id="fps">FPS: <span class="value">0</span></span>
+                    <span id="resolution">Resolution: <span class="value">0x0</span></span>
+                    <span id="timestamp">Time: <span class="value">--:--:--</span></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="loadSample" class="btn">Load Sample Image</button>
+            <button id="applyCannyFilter" class="btn">Canny Edge</button>
+            <button id="applySobelFilter" class="btn">Sobel Edge</button>
+            <button id="applyGrayscaleFilter" class="btn">Grayscale</button>
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+            <button id="uploadImage" class="btn">Upload Image</button>
+        </div>
+
+        <div class="info-panel">
+            <h3>Processing Information</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <label>Mode:</label>
+                    <span id="currentMode">Canny</span>
+                </div>
+                <div class="info-item">
+                    <label>Processing Time:</label>
+                    <span id="processingTime">0ms</span>
+                </div>
+                <div class="info-item">
+                    <label>Image Size:</label>
+                    <span id="imageSize">0 KB</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Real-Time Edge Detection Viewer</p>
+    </footer>
+</div>
+
+<script src="main.ts"></script>
+</body>
+</html>
