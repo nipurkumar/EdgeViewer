@@ -2,14 +2,12 @@ package com.example.edgeviewer
 
 import android.content.Context
 import android.graphics.ImageFormat
-import android.graphics.SurfaceTexture
 import android.hardware.camera2.*
 import android.media.Image
 import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
-import android.util.Size
 import android.view.Surface
 import com.example.edgeviewer.utils.ImageUtils
 import java.util.concurrent.Semaphore

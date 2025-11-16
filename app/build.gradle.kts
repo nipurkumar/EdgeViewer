@@ -6,6 +6,14 @@ plugins {
 android {
     namespace = "com.example.edgeviewer"
     compileSdk = 34
+    ndkVersion = "25.2.9519653"
+
+    externalNativeBuild {
+        cmake {
+            path = file("CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
 
     defaultConfig {
         applicationId = "com.example.edgeviewer"
@@ -13,18 +21,16 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         externalNativeBuild {
             cmake {
-                cppFlags += listOf("-std=c++17", "-frtti", "-fexceptions")
-                arguments += listOf("-DANDROID_STL=c++_shared")
+                arguments += listOf("-DANDROID_STL=c++_static")
             }
         }
 
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            abiFilters += listOf("arm64-v8a")
         }
     }
 
@@ -51,18 +57,18 @@ android {
         jvmTarget = "11"
     }
 
-    externalNativeBuild {
-        cmake {
-            path = file("CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
 
     packagingOptions {
         pickFirsts += listOf(
-            "**/libc++_shared.so",
-            "**/libnative-lib.so"
+            "**/libnative-lib.so",
+            "**/libopencv_java4.so",
+            "**/libc++_shared.so"
         )
+    }
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("src/main/jnilibs")
+        }
     }
 }
 

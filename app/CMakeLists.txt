@@ -1,19 +1,17 @@
 cmake_minimum_required(VERSION 3.22.1)
 project("edgeviewer")
 
-# C++ Standard
+# Use C++17
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# OpenCV Path (adjust to your OpenCV SDK location)
-set(OpenCV_DIR ${CMAKE_SOURCE_DIR}/../opencv-sdk/sdk/native/jni)
-find_package(OpenCV REQUIRED)
 
-# Include directories
+
+# Path to OpenCV headers
 include_directories(
         ${CMAKE_SOURCE_DIR}/../native
         ${CMAKE_SOURCE_DIR}/../native/utils
-        ${OpenCV_INCLUDE_DIRS}
+        F:/OpenCV-android-sdk/sdk/native/jni/include
 )
 
 # Add native library
@@ -25,7 +23,7 @@ add_library(
         ${CMAKE_SOURCE_DIR}/../native/utils/opencv_helpers.cpp
 )
 
-# Find required libraries
+# Find standard Android libraries
 find_library(log-lib log)
 find_library(android-lib android)
 find_library(jnigraphics-lib jnigraphics)
@@ -33,8 +31,15 @@ find_library(jnigraphics-lib jnigraphics)
 # Link libraries
 target_link_libraries(
         native-lib
-        ${OpenCV_LIBS}
         ${log-lib}
         ${android-lib}
         ${jnigraphics-lib}
+        # Link OpenCV shared libs (.so files in jniLibs/arm64-v8a)
+        ${CMAKE_SOURCE_DIR}/src/main/jniLibs/arm64-v8a/libopencv_core.so
+        ${CMAKE_SOURCE_DIR}/src/main/jniLibs/arm64-v8a/libopencv_imgproc.so
+        ${CMAKE_SOURCE_DIR}/src/main/jniLibs/arm64-v8a/libopencv_imgcodecs.so
+        ${CMAKE_SOURCE_DIR}/src/main/jniLibs/arm64-v8a/libopencv_video.so
+        ${CMAKE_SOURCE_DIR}/src/main/jniLibs/arm64-v8a/libopencv_features2d.so
+        ${CMAKE_SOURCE_DIR}/src/main/jniLibs/arm64-v8a/libopencv_calib3d.so
+        ${CMAKE_SOURCE_DIR}/src/main/jniLibs/arm64-v8a/libopencv_java4.so
 )
