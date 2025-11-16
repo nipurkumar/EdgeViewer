@@ -1,55 +1,33 @@
 package opengl
 
-import android.opengl.GLES20
-import android.opengl.GLUtils
-import java.nio.ByteBuffer
+import android.opengl.GLES20.*
 
 class GLTexture {
-    private var textureId: Int = 0
+    private val id = IntArray(1)
 
-    init {
-        createTexture()
+    fun create() {
+        glGenTextures(1, id, 0)
+        glBindTexture(GL_TEXTURE_2D, id[0])
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
     }
 
-    private fun createTexture() {
-        val textureIds = IntArray(1)
-        GLES20.glGenTextures(1, textureIds, 0)
-        textureId = textureIds[0]
-
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
-
-        // Set texture parameters
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
-        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
-    }
-
-    fun updateTexture(data: ByteArray, width: Int, height: Int) {
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
-
-        val buffer = ByteBuffer.wrap(data)
-
-        GLES20.glTexImage2D(
-            GLES20.GL_TEXTURE_2D,
-            0,
-            GLES20.GL_RGBA,
-            width,
-            height,
-            0,
-            GLES20.GL_RGBA,
-            GLES20.GL_UNSIGNED_BYTE,
-            buffer
-        )
+    fun update(data: ByteArray, width: Int, height: Int) {
+        glBindTexture(GL_TEXTURE_2D, id[0])
+        val buffer = java.nio.ByteBuffer.allocateDirect(data.size)
+            .apply { put(data); position(0) }
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer)
     }
 
     fun bind(uniformLocation: Int) {
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
-        GLES20.glUniform1i(uniformLocation, 0)
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, id[0])
+        glUniform1i(uniformLocation, 0)
     }
 
     fun release() {
-        GLES20.glDeleteTextures(1, intArrayOf(textureId), 0)
+        if (id[0] != 0) glDeleteTextures(1, id, 0)
     }
 }

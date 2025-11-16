@@ -20,50 +20,37 @@ bool EdgeProcessor::initialize() {
     return true;
 }
 
-bool EdgeProcessor::processFrame(
-        const uint8_t* inputData,
-        int width,
-        int height,
-        ProcessingMode mode,
-        std::vector<uint8_t>& outputData) {
-
-    if (!initialized_ || inputData == nullptr) {
-        return false;
-    }
+bool EdgeProcessor::processFrame(const uint8_t* inputData,
+                                 int width, int height,
+                                 ProcessingMode mode,
+                                 std::vector<uint8_t>& outputData)
+{
+    if (!initialized_ || !inputData) return false;
 
     try {
-        // Create input Mat from RGB data
-        cv::Mat inputMat(height, width, CV_8UC3, const_cast<uint8_t*>(inputData));
-        cv::Mat processedMat;
+        // Android byte[] → RGBA
+        cv::Mat rgba(height, width, CV_8UC4, const_cast<uint8_t*>(inputData));
 
-        // Process based on mode
+        // Convert to RGB for the rest of the pipeline
+        cv::Mat rgb;
+        cv::cvtColor(rgba, rgb, cv::COLOR_RGBA2RGB);   // now CV_8UC3
+
+        cv::Mat processed;
         switch (mode) {
-            case ProcessingMode::CANNY:
-                processCanny(inputMat, processedMat);
-                break;
-            case ProcessingMode::SOBEL:
-                processSobel(inputMat, processedMat);
-                break;
-            case ProcessingMode::GRAYSCALE:
-                processGrayscale(inputMat, processedMat);
-                break;
-            default:
-                processedMat = inputMat.clone();
-                break;
+            case ProcessingMode::CANNY:   processCanny(rgb, processed); break;
+            case ProcessingMode::SOBEL:   processSobel(rgb, processed); break;
+            case ProcessingMode::GRAYSCALE: processGrayscale(rgb, processed); break;
+            default: processed = rgb.clone(); break;
         }
 
-        // Convert to RGBA for OpenGL
-        cv::Mat rgbaMat;
-        OpenCVHelpers::convertToRGBA(processedMat, rgbaMat);
+        // Convert result to RGBA for OpenGL
+        cv::Mat outRGBA;
+        OpenCVHelpers::convertToRGBA(processed, outRGBA);
 
-        // Copy to output vector
-        outputData.resize(rgbaMat.total() * rgbaMat.channels());
-        std::memcpy(outputData.data(), rgbaMat.data, outputData.size());
-
+        outputData.assign(outRGBA.data, outRGBA.data + outRGBA.total()*outRGBA.channels());
         return true;
-
     } catch (const cv::Exception& e) {
-        LOGD("OpenCV exception: %s", e.what());
+        LOGD("OpenCV error: %s", e.what());
         return false;
     }
 }

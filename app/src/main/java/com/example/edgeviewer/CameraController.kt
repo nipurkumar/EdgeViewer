@@ -8,7 +8,6 @@ import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
-import android.view.Surface
 import com.example.edgeviewer.utils.ImageUtils
 import java.util.concurrent.Semaphore
 
@@ -16,6 +15,7 @@ class CameraController(
     private val context: Context,
     private val frameCallback: (ByteArray, Int, Int) -> Unit
 ) {
+
     companion object {
         private const val TAG = "CameraController"
         private const val CAMERA_WIDTH = 1280
@@ -35,7 +35,9 @@ class CameraController(
         cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
     }
 
-    fun startCamera(surface: Surface) {
+    // -------------------------------------------------------------
+    // Public
+    fun startCamera() {
         startBackgroundThread()
         openCamera()
     }
@@ -45,28 +47,35 @@ class CameraController(
         stopBackgroundThread()
     }
 
+    // -------------------------------------------------------------
+    // Camera open / close
     private fun openCamera() {
         try {
             val cameraId = cameraManager.cameraIdList[0] // Use back camera
 
-            // Setup ImageReader for processing frames
+            // Setup ImageReader
             imageReader = ImageReader.newInstance(
                 CAMERA_WIDTH,
                 CAMERA_HEIGHT,
                 ImageFormat.YUV_420_888,
                 2
             )
-
-            imageReader.setOnImageAvailableListener({
-                val image = it.acquireLatestImage()
-                if (image != null) {
+            imageReader.setOnImageAvailableListener({ reader ->
+                reader.acquireLatestImage()?.let { image ->
                     processImage(image)
-                    image.close()
                 }
             }, backgroundHandler)
 
             if (!cameraOpenCloseLock.tryAcquire(2500, java.util.concurrent.TimeUnit.MILLISECONDS)) {
-                throw RuntimeException("Time out waiting to lock camera opening.")
+                throw RuntimeException("Timeout waiting to lock camera opening.")
+            }
+
+            // Check permission manually
+            if (context.checkSelfPermission(android.Manifest.permission.CAMERA) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.e(TAG, "Camera permission not granted")
+                return
             }
 
             cameraManager.openCamera(cameraId, stateCallback, backgroundHandler)
@@ -79,7 +88,7 @@ class CameraController(
         override fun onOpened(camera: CameraDevice) {
             cameraOpenCloseLock.release()
             cameraDevice = camera
-            createCameraPreviewSession()
+            createCaptureSession()
         }
 
         override fun onDisconnected(camera: CameraDevice) {
@@ -93,35 +102,31 @@ class CameraController(
         }
     }
 
-    private fun createCameraPreviewSession() {
+    private fun createCaptureSession() {
         try {
-            val surface = imageReader.surface
-
-            // Create capture session with ImageReader surface
             cameraDevice?.createCaptureSession(
-                listOf(surface),
+                listOf(imageReader.surface), // ✅ Only ImageReader
                 object : CameraCaptureSession.StateCallback() {
                     override fun onConfigured(session: CameraCaptureSession) {
                         if (cameraDevice == null) return
 
                         captureSession = session
 
-                        // Setup continuous capture
                         val captureRequest = cameraDevice!!.createCaptureRequest(
                             CameraDevice.TEMPLATE_PREVIEW
                         ).apply {
-                            addTarget(surface)
-                            set(CaptureRequest.CONTROL_AF_MODE,
-                                CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
-                            set(CaptureRequest.CONTROL_AE_MODE,
-                                CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH)
+                            addTarget(imageReader.surface)
+                            set(
+                                CaptureRequest.CONTROL_AF_MODE,
+                                CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
+                            )
+                            set(
+                                CaptureRequest.CONTROL_AE_MODE,
+                                CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH
+                            )
                         }
 
-                        session.setRepeatingRequest(
-                            captureRequest.build(),
-                            null,
-                            backgroundHandler
-                        )
+                        session.setRepeatingRequest(captureRequest.build(), null, backgroundHandler)
                     }
 
                     override fun onConfigureFailed(session: CameraCaptureSession) {
@@ -131,16 +136,19 @@ class CameraController(
                 backgroundHandler
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to create preview session", e)
+            Log.e(TAG, "Error creating capture session", e)
         }
     }
 
     private fun processImage(image: Image) {
-        // Convert YUV to RGB
-        val rgbData = ImageUtils.convertYuvToRgb(image)
-
-        // Send to processing callback
-        frameCallback(rgbData, image.width, image.height)
+        try {
+            val rgbData = ImageUtils.convertYuvToRgb(image)
+            rgbData?.let { frameCallback(it, image.width, image.height) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to process image", e)
+        } finally {
+            image.close()
+        }
     }
 
     private fun closeCamera() {
@@ -150,7 +158,7 @@ class CameraController(
             captureSession = null
             cameraDevice?.close()
             cameraDevice = null
-            imageReader.close()
+            if (::imageReader.isInitialized) imageReader.close()
         } catch (e: InterruptedException) {
             Log.e(TAG, "Interrupted while closing camera", e)
         } finally {
@@ -158,6 +166,8 @@ class CameraController(
         }
     }
 
+    // -------------------------------------------------------------
+    // Background thread
     private fun startBackgroundThread() {
         backgroundThread = HandlerThread("CameraBackground").also { it.start() }
         backgroundHandler = Handler(backgroundThread!!.looper)

@@ -4,16 +4,10 @@ plugins {
 }
 
 android {
+
     namespace = "com.example.edgeviewer"
     compileSdk = 34
-    ndkVersion = "25.2.9519653"
-
-    externalNativeBuild {
-        cmake {
-            path = file("CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
+    ndkVersion = "27.0.12077973"
 
     defaultConfig {
         applicationId = "com.example.edgeviewer"
@@ -23,17 +17,21 @@ android {
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        externalNativeBuild {
-            cmake {
-                arguments += listOf("-DANDROID_STL=c++_static")
-            }
-        }
-
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
     }
 
+    // ---------------------- CMAKE CONFIG ----------------------
+    externalNativeBuild {
+        cmake {
+            // Your CMakeLists.txt inside src/main/cpp
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
+    // ---------------------- BUILD TYPES ----------------------
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -48,6 +46,7 @@ android {
         }
     }
 
+    // ---------------------- JAVA/KOTLIN ----------------------
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -57,17 +56,25 @@ android {
         jvmTarget = "11"
     }
 
-
-    packagingOptions {
-        pickFirsts += listOf(
-            "**/libnative-lib.so",
-            "**/libopencv_java4.so",
-            "**/libc++_shared.so"
-        )
-    }
+    // ---------------------- JNI LIBS ----------------------
     sourceSets {
         getByName("main") {
-            jniLibs.srcDirs("src/main/jnilibs")
+            jniLibs.srcDirs("src/main/jnilibs")   // make sure folder exists
+        }
+    }
+
+    // ---------------------- PACKAGING ----------------------
+    packaging {
+        resources {
+            pickFirsts.addAll(
+                listOf(
+                    "**/libopencv_java4.so",
+                    "**/libc++_shared.so",
+                    "**/libnative-lib.so",
+                    "**/libopencv_core.so",
+                    "**/libopencv_imgproc.so"
+                )
+            )
         }
     }
 }

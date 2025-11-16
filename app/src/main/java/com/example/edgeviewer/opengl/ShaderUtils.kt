@@ -1,71 +1,59 @@
 package opengl
 
 import android.content.Context
-import android.opengl.GLES20
-import android.util.Log
+import android.opengl.GLES20.*
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
+/** Loads, compiles and links a vertex + fragment shader from assets. */
 object ShaderUtils {
-    private const val TAG = "ShaderUtils"
 
-    fun loadShaderFromAssets(context: Context, type: Int, fileName: String): Int {
-        val shaderCode = readShaderFromAssets(context, fileName)
-        return loadShader(type, shaderCode)
+    /** Public API used by GLRenderer */
+    fun loadProgramFromAssets(
+        context: Context,
+        vertexFile: String,
+        fragmentFile: String
+    ): Int {
+        val v = compileShader(context, GL_VERTEX_SHADER, vertexFile)
+        val f = compileShader(context, GL_FRAGMENT_SHADER, fragmentFile)
+        return linkProgram(v, f)
     }
 
-    fun loadShader(type: Int, shaderCode: String): Int {
-        val shader = GLES20.glCreateShader(type)
+    // --------------------------------------------------------------
+    private fun compileShader(ctx: Context, type: Int, assetName: String): Int {
+        val source = readAsset(ctx, assetName)
+        val shader = glCreateShader(type)
+        glShaderSource(shader, source)
+        glCompileShader(shader)
 
-        GLES20.glShaderSource(shader, shaderCode)
-        GLES20.glCompileShader(shader)
-
-        // Check compilation status
-        val compiled = IntArray(1)
-        GLES20.glGetShaderiv(shader, GLES20.GL_COMPILE_STATUS, compiled, 0)
-
-        if (compiled[0] == 0) {
-            Log.e(TAG, "Error compiling shader: ${GLES20.glGetShaderInfoLog(shader)}")
-            GLES20.glDeleteShader(shader)
-            return 0
+        val ok = IntArray(1)
+        glGetShaderiv(shader, GL_COMPILE_STATUS, ok, 0)
+        if (ok[0] == 0) {
+            val log = glGetShaderInfoLog(shader)
+            glDeleteShader(shader)
+            throw RuntimeException("Shader compile failed ($assetName):\n$log")
         }
-
         return shader
     }
 
-    fun createProgram(vertexShader: Int, fragmentShader: Int): Int {
-        val program = GLES20.glCreateProgram()
+    private fun linkProgram(v: Int, f: Int): Int {
+        val prog = glCreateProgram()
+        glAttachShader(prog, v)
+        glAttachShader(prog, f)
+        glLinkProgram(prog)
 
-        GLES20.glAttachShader(program, vertexShader)
-        GLES20.glAttachShader(program, fragmentShader)
-        GLES20.glLinkProgram(program)
-
-        // Check link status
-        val linkStatus = IntArray(1)
-        GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linkStatus, 0)
-
-        if (linkStatus[0] == 0) {
-            Log.e(TAG, "Error linking program: ${GLES20.glGetProgramInfoLog(program)}")
-            GLES20.glDeleteProgram(program)
-            return 0
+        val ok = IntArray(1)
+        glGetProgramiv(prog, GL_LINK_STATUS, ok, 0)
+        if (ok[0] == 0) {
+            val log = glGetProgramInfoLog(prog)
+            glDeleteProgram(prog)
+            throw RuntimeException("Program link failed:\n$log")
         }
-
-        return program
+        return prog
     }
 
-    private fun readShaderFromAssets(context: Context, fileName: String): String {
-        val stringBuilder = StringBuilder()
-        try {
-            val inputStream = context.assets.open(fileName)
-            val reader = BufferedReader(InputStreamReader(inputStream))
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                stringBuilder.append(line).append('\n')
-            }
-            reader.close()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error reading shader file: $fileName", e)
+    private fun readAsset(ctx: Context, file: String): String =
+        ctx.assets.open(file).use { input ->
+            BufferedReader(InputStreamReader(input)).readText()
         }
-        return stringBuilder.toString()
-    }
 }

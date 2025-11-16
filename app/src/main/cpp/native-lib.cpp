@@ -88,7 +88,7 @@ Java_com_example_edgeviewer_NativeBridge_initialize(
         }
         return JNI_TRUE;
     } catch (...) {
-        LOGE("Failed to initialize native processor");
+        LOGE("Failed to initialize cpp processor");
         return JNI_FALSE;
     }
 }

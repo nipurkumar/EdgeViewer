@@ -3,27 +3,23 @@ package com.example.edgeviewer
 import android.content.Context
 import android.opengl.GLSurfaceView
 import android.util.AttributeSet
+import android.view.Surface
 import android.view.SurfaceHolder
 import opengl.GLRenderer
+
 
 class GLView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
 ) : GLSurfaceView(context, attrs) {
 
-    private lateinit var renderer: GLRenderer
-    val surface: android.view.Surface
-        get() = holder.surface
+    private val renderer = GLRenderer(context)
+
+    internal val glRenderer get() = renderer
 
     init {
-        // Configure OpenGL ES 2.0 context
         setEGLContextClientVersion(2)
-
-        // Setup renderer
-        renderer = GLRenderer(context)
         setRenderer(renderer)
-
-        // Render only when requested
         renderMode = RENDERMODE_WHEN_DIRTY
     }
 
@@ -38,8 +34,11 @@ class GLView @JvmOverloads constructor(
         super.surfaceCreated(holder)
     }
 
+    val surface: Surface?
+        get() = holder?.surface
+
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         super.surfaceDestroyed(holder)
-        renderer.release()
+        queueEvent { renderer.release() }
     }
 }

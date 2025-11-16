@@ -1,168 +1,136 @@
 package opengl
 
+
 import android.content.Context
-import android.opengl.GLES20
+import android.opengl.GLES20.*
 import android.opengl.GLSurfaceView
-import android.opengl.Matrix
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.FloatBuffer
+import java.nio.ShortBuffer
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+import opengl.ShaderUtils
 
 class GLRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
+    private var program = 0
     private var texture: GLTexture? = null
-    private var shaderProgram: Int = 0
-    private var vertexBuffer: ByteBuffer? = null
 
-    private val mvpMatrix = FloatArray(16)
-    private val projectionMatrix = FloatArray(16)
-    private val viewMatrix = FloatArray(16)
-
-    // Vertex coordinates for full-screen quad
+    // Geometry (full‑screen quad)
     private val vertexCoords = floatArrayOf(
-        -1.0f,  1.0f, 0.0f,  // top left
-        -1.0f, -1.0f, 0.0f,  // bottom left
-        1.0f, -1.0f, 0.0f,  // bottom right
-        1.0f,  1.0f, 0.0f   // top right
+        -1f,  1f, 0f,
+        -1f, -1f, 0f,
+        1f, -1f, 0f,
+        1f,  1f, 0f
     )
-
-    // Texture coordinates
-    private val textureCoords = floatArrayOf(
-        0.0f, 0.0f,  // top left
-        0.0f, 1.0f,  // bottom left
-        1.0f, 1.0f,  // bottom right
-        1.0f, 0.0f   // top right
+    private val texCoords = floatArrayOf(
+        0f, 0f,
+        0f, 1f,
+        1f, 1f,
+        1f, 0f
     )
+    private val indices = shortArrayOf(0, 1, 2, 0, 2, 3)
 
-    private val drawOrder = shortArrayOf(0, 1, 2, 0, 2, 3)
+    // Buffers (created once)
+    private lateinit var vertexBuffer: FloatBuffer
+    private lateinit var texCoordBuffer: FloatBuffer
+    private lateinit var indexBuffer: ShortBuffer
 
-    private var textureData: ByteArray? = null
-    private var textureWidth = 0
-    private var textureHeight = 0
-    private var textureUpdated = false
+    // Texture update queue
+    @Volatile private var pendingData: ByteArray? = null
+    @Volatile private var pendingW = 0
+    @Volatile private var pendingH = 0
+    @Volatile private var needsUpdate = false
 
-    override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-        // Set clear color
-        GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
+    // -----------------------------------------------------------------
+    override fun onSurfaceCreated(unused: GL10?, config: EGLConfig?) {
+        glClearColor(0f, 0f, 0f, 1f)
 
-        // Initialize shader program
-        initializeShaders()
+        // ---- 1. Shader program ------------------------------------
+        program = ShaderUtils.loadProgramFromAssets(
+            context,
+            "vertex_shader.glsl",
+            "fragment_shader.glsl"
+        )
+        glUseProgram(program)
 
-        // Initialize vertex buffer
-        initializeBuffers()
+        // ---- 2. Geometry buffers ----------------------------------
+        vertexBuffer = floatBuffer(vertexCoords)
+        texCoordBuffer = floatBuffer(texCoords)
+        indexBuffer = shortBuffer(indices)
 
-        // Initialize texture
+        // ---- 3. Texture -------------------------------------------
         texture = GLTexture()
+        texture?.create()
 
-        // Enable blend for transparency
-        GLES20.glEnable(GLES20.GL_BLEND)
-        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+        // ---- 4. Blend (optional) ----------------------------------
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
     }
 
-    override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
-        GLES20.glViewport(0, 0, width, height)
-
-        val ratio = width.toFloat() / height.toFloat()
-        Matrix.frustumM(projectionMatrix, 0, -ratio, ratio, -1f, 1f, 3f, 7f)
+    override fun onSurfaceChanged(unused: GL10?, width: Int, height: Int) {
+        glViewport(0, 0, width, height)
     }
 
-    override fun onDrawFrame(gl: GL10?) {
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
+    override fun onDrawFrame(unused: GL10?) {
+        glClear(GL_COLOR_BUFFER_BIT)
 
-        // Update texture if new data is available
-        if (textureUpdated && textureData != null) {
-            texture?.updateTexture(textureData!!, textureWidth, textureHeight)
-            textureUpdated = false
+        // ---- Update texture if new frame -------------------------
+        if (needsUpdate && pendingData != null) {
+            texture?.update(pendingData!!, pendingW, pendingH)
+            needsUpdate = false
+            pendingData = null
         }
 
-        // Use shader program
-        GLES20.glUseProgram(shaderProgram)
+        // ---- Draw ------------------------------------------------
+        glUseProgram(program)
 
-        // Set matrices
-        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, -3f, 0f, 0f, 0f, 0f, 1f, 0f)
-        Matrix.multiplyMM(mvpMatrix, 0, projectionMatrix, 0, viewMatrix, 0)
+        val posLoc = glGetAttribLocation(program, "aPosition")
+        val texLoc = glGetAttribLocation(program, "aTexCoord")
+        val texUni = glGetUniformLocation(program, "uTexture")
 
-        // Get shader locations
-        val positionHandle = GLES20.glGetAttribLocation(shaderProgram, "aPosition")
-        val texCoordHandle = GLES20.glGetAttribLocation(shaderProgram, "aTexCoord")
-        val mvpMatrixHandle = GLES20.glGetUniformLocation(shaderProgram, "uMVPMatrix")
-        val textureHandle = GLES20.glGetUniformLocation(shaderProgram, "uTexture")
+        glEnableVertexAttribArray(posLoc)
+        glEnableVertexAttribArray(texLoc)
 
-        // Enable vertex attribute
-        GLES20.glEnableVertexAttribArray(positionHandle)
-        GLES20.glEnableVertexAttribArray(texCoordHandle)
+        vertexBuffer.position(0)
+        glVertexAttribPointer(posLoc, 3, GL_FLOAT, false, 0, vertexBuffer)
 
-        // Set vertex data
-        vertexBuffer?.position(0)
-        GLES20.glVertexAttribPointer(
-            positionHandle, 3, GLES20.GL_FLOAT, false,
-            0, vertexBuffer
-        )
+        texCoordBuffer.position(0)
+        glVertexAttribPointer(texLoc, 2, GL_FLOAT, false, 0, texCoordBuffer)
 
-        // Set texture coordinate data
-        val texBuffer = ByteBuffer.allocateDirect(textureCoords.size * 4)
-            .order(ByteOrder.nativeOrder())
-            .asFloatBuffer()
-            .put(textureCoords)
-            .position(0)
+        texture?.bind(texUni)
 
-        GLES20.glVertexAttribPointer(
-            texCoordHandle, 2, GLES20.GL_FLOAT, false,
-            0, texBuffer
-        )
+        indexBuffer.position(0)
+        glDrawElements(GL_TRIANGLES, indices.size, GL_UNSIGNED_SHORT, indexBuffer)
 
-        // Set matrices
-        GLES20.glUniformMatrix4fv(mvpMatrixHandle, 1, false, mvpMatrix, 0)
-
-        // Bind texture
-        texture?.bind(textureHandle)
-
-        // Draw quad
-        val indexBuffer = ByteBuffer.allocateDirect(drawOrder.size * 2)
-            .order(ByteOrder.nativeOrder())
-            .asShortBuffer()
-            .put(drawOrder)
-            .position(0)
-
-        GLES20.glDrawElements(
-            GLES20.GL_TRIANGLES, drawOrder.size,
-            GLES20.GL_UNSIGNED_SHORT, indexBuffer
-        )
-
-        // Disable vertex attributes
-        GLES20.glDisableVertexAttribArray(positionHandle)
-        GLES20.glDisableVertexAttribArray(texCoordHandle)
+        glDisableVertexAttribArray(posLoc)
+        glDisableVertexAttribArray(texLoc)
     }
 
-    private fun initializeShaders() {
-        val vertexShader = ShaderUtils.loadShaderFromAssets(
-            context, GLES20.GL_VERTEX_SHADER, "vertex_shader.glsl"
-        )
-        val fragmentShader = ShaderUtils.loadShaderFromAssets(
-            context, GLES20.GL_FRAGMENT_SHADER, "fragment_shader.glsl"
-        )
-
-        shaderProgram = ShaderUtils.createProgram(vertexShader, fragmentShader)
-    }
-
-    private fun initializeBuffers() {
-        vertexBuffer = ByteBuffer.allocateDirect(vertexCoords.size * 4)
-            .order(ByteOrder.nativeOrder())
-            .asFloatBuffer()
-            .put(vertexCoords)
-            .apply { position(0) } as ByteBuffer
-    }
-
-    fun updateTexture(data: ByteArray, width: Int, height: Int) {
-        textureData = data
-        textureWidth = width
-        textureHeight = height
-        textureUpdated = true
+    // -----------------------------------------------------------------
+    fun updateTexture(data: ByteArray, w: Int, h: Int) {
+        pendingData = data.copyOf()
+        pendingW = w
+        pendingH = h
+        needsUpdate = true
     }
 
     fun release() {
         texture?.release()
-        GLES20.glDeleteProgram(shaderProgram)
+        if (program != 0) glDeleteProgram(program)
     }
+
+    // -----------------------------------------------------------------
+    private fun floatBuffer(arr: FloatArray): FloatBuffer =
+        ByteBuffer.allocateDirect(arr.size * 4)
+            .order(ByteOrder.nativeOrder())
+            .asFloatBuffer()
+            .apply { put(arr); position(0) }
+
+    private fun shortBuffer(arr: ShortArray): ShortBuffer =
+        ByteBuffer.allocateDirect(arr.size * 2)
+            .order(ByteOrder.nativeOrder())
+            .asShortBuffer()
+            .apply { put(arr); position(0) }
 }
